@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Write non verbose code. When appropriate, make sure to use global variables for css and use reusable components.
+
 ## Project
 
 A vet office management app (clients/pets/appointments/visit notes with role-based access:
@@ -22,6 +24,26 @@ Target deployment (not yet wired up): Neon (Postgres) for the backend's DB, Clou
 the backend container, Firebase Hosting for the frontend static build, GitHub Actions for
 CI/CD. The whole stack is meant to run on free tiers — flag it before adding anything
 (file uploads, email/SMS, etc.) that would require a paid service.
+
+## Plan & progress
+
+Keep this section current — update it whenever a step below is completed or the plan changes.
+
+Build order:
+1. ~~Scaffold: Laravel backend (API-only) + React/TS frontend, running locally, talking to each other~~ — **done**
+2. Auth: Sanctum setup, signup/login/logout, `role` field on the user model — **current step**
+3. RBAC: policies/middleware enforcing role permissions, reflected in frontend UI (real enforcement stays server-side)
+4. Pets: model/migration, relationship to User, full CRUD from the client role's perspective
+5. Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows
+6. Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients
+7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts
+8. Neon migration: swap local Postgres for Neon in the deployed environment
+9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main
+10. Polish: form validation, error handling, empty/loading states, local dev seed data
+
+Open questions (ask the user before assuming, when relevant step comes up):
+- Whether appointment scheduling needs double-booking prevention in MVP, or a plain date/time field is enough
+- Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
 
 ## Commands
 
