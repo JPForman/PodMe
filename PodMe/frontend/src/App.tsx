@@ -1,33 +1,49 @@
-import { useEffect, useState } from 'react'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
+import { useAuth } from './context/AuthContext'
+import { DashboardPage } from './pages/DashboardPage'
+import { LoginPage } from './pages/LoginPage'
+import { PetsPage } from './pages/PetsPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { ProtectedRoute } from './routes/ProtectedRoute'
 
-type PingResponse = {
-  message: string
-}
-
-function App() {
-  const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
-  const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/ping')
-      .then((res) => res.json() as Promise<PingResponse>)
-      .then((data) => {
-        setMessage(data.message)
-        setStatus('ok')
-      })
-      .catch(() => setStatus('error'))
-  }, [])
+function HomePage() {
+  const { user } = useAuth()
+  if (user) return <Navigate to="/dashboard" replace />
 
   return (
     <section id="center">
       <h1>PodMe</h1>
-      {status === 'loading' && <p>Contacting backend...</p>}
-      {status === 'ok' && <p>Backend says: {message}</p>}
-      {status === 'error' && (
-        <p>Could not reach the Laravel backend at http://127.0.0.1:8000</p>
-      )}
+      <p>
+        <Link to="/login">Log in</Link> or <Link to="/register">register</Link> to continue.
+      </p>
     </section>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pets"
+        element={
+          <ProtectedRoute>
+            <PetsPage />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   )
 }
 

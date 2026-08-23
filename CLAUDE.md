@@ -31,10 +31,10 @@ Keep this section current — update it whenever a step below is completed or th
 
 Build order:
 1. ~~Scaffold: Laravel backend (API-only) + React/TS frontend, running locally, talking to each other~~ — **done**
-2. Auth: Sanctum setup, signup/login/logout, `role` field on the user model — **current step**
-3. RBAC: policies/middleware enforcing role permissions, reflected in frontend UI (real enforcement stays server-side)
-4. Pets: model/migration, relationship to User, full CRUD from the client role's perspective
-5. Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows
+2. ~~Auth: Sanctum setup, signup/login/logout, `role` field on the user model~~ — **done**
+3. ~~RBAC: role-checking middleware, reflected in frontend UI (real enforcement stays server-side)~~ — **done**
+4. ~~Pets: model/migration, relationship to User, full CRUD from the client role's perspective~~ — **done**
+5. Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows — **current step**
 6. Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients
 7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts
 8. Neon migration: swap local Postgres for Neon in the deployed environment
@@ -89,11 +89,50 @@ a bearer token and sends it via the `Authorization` header, not cookies. CORS is
 Laravel's defaults (`allowed_origins: '*'` on `api/*`), which works for token auth but would
 need `supports_credentials` if cookie-based auth were ever introduced instead.
 
-**RBAC**: a single `role` column on `users` (values: `admin` / `employee` / `user`), enforced
-with Laravel policies/gates — deliberately not using the `spatie/laravel-permission` package,
-to keep the mental model simple while teaching. Only the default Laravel `User` model/migration
-exists so far; `role` and the app's real domain models (Pets, Appointments, Notes) are not yet
-implemented.
+**RBAC**: a single `role` column on `users` (values: `admin` / `employee` / `client`, plain
+string column with a `client` default — not a DB-level enum) — deliberately not using the
+`spatie/laravel-permission` package, to keep the mental model simple while teaching. `role` is
+intentionally left out of `User`'s mass-assignable (`Fillable`) attributes so it can never be
+set via client-supplied input; the register endpoint always forces new accounts to `client`,
+and constants `User::ROLE_ADMIN` / `ROLE_EMPLOYEE` / `ROLE_CLIENT` exist on the model. Auth is
+done: `POST /api/register`, `POST /api/login`, `POST /api/logout` (Sanctum token
+issuance/revocation) live in `app/Http/Controllers/Auth/AuthController.php`, validated by
+`app/Http/Requests/Auth/{Register,Login}Request.php`.
+
+Role enforcement (step 3) is a custom route middleware — `app/Http/Middleware/EnsureUserHasRole.php`
+reads `$request->user()->role` and aborts 403 if it isn't in the roles passed to it; it's
+registered under the alias `role` in `bootstrap/app.php` (`withMiddleware`), so any route can
+add `->middleware('role:admin,employee')` next to `auth:sanctum`. It stays available for
+coarse, model-less checks, but per-record authorization (step 4 onward) uses Eloquent Policies
+instead — see Pets below.
+
+**Pets (step 4)**: `app/Models/Pet.php` (fields: `name`, `species` required; `breed`,
+`date_of_birth`, `weight`, `notes` optional; `owner_id` FK to `users`, left out of `Fillable`
+same as `role` on `User` so it's always set server-side from the authenticated user, never
+from client input) `belongsTo` `User::owner()`; `User::pets()` is the inverse `hasMany`.
+Authorization is `app/Policies/PetPolicy.php` (Laravel's per-record equivalent of a hand-rolled
+`if` in an Express handler, auto-wired to `Pet` by naming convention, invoked via
+`$this->authorize()` — added to the base `Controller` via the `AuthorizesRequests` trait):
+clients can create/view/update/delete only their own pets; admins/employees can view any pet
+(needed for appointments/notes in steps 5-6) but cannot create/edit/delete on a client's
+behalf. `app/Http/Controllers/PetController.php` is a standard resource controller wired with
+`Route::apiResource('pets', PetController::class)` in `routes/api.php`; `index` branches on
+role to return either `$user->pets` (client) or all pets with `owner` eager-loaded (staff).
+Validation is in `app/Http/Requests/Pet/{Store,Update}PetRequest.php`. Covered by
+`tests/Feature/Pets/PetTest.php` (ownership, staff visibility, and validation, 14 tests).
+
+**Frontend auth**: `src/context/AuthContext.tsx` holds `{ user, token }` (persisted to
+`localStorage`) with `login`/`register`/`logout`, backed by a small fetch wrapper in
+`src/lib/api.ts` (`apiFetch`, `ApiError`). `src/routes/ProtectedRoute.tsx` redirects to
+`/login` when logged out, and accepts an optional `roles` prop for gating a route to specific
+roles client-side — this is convenience/UX only, since real enforcement is server-side.
+Pages: `LoginPage`, `RegisterPage`, `DashboardPage`, `PetsPage` (routed in `App.tsx` via
+`react-router-dom`); `DashboardPage` renders different placeholder content per role and links
+to `/pets`. `PetsPage` renders either an editable list (client, via the reusable `PetForm`
+component for both create and edit) or a read-only list with owner name (staff); API calls
+live in `src/lib/pets.ts`. `FormField` (`src/components/FormField.tsx`) grew `required` and
+`multiline` props to support Pet's optional fields and the notes textarea, kept
+backwards-compatible with the existing Auth forms (both default to the old behavior).
 
 **Local dev database**: Homebrew Postgres 15 running locally, database `podme_dev`
 (`DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USERNAME=jpcyborg`, no
