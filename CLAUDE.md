@@ -41,7 +41,9 @@ Build order:
 6. ~~Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients~~ — **done**
 7. ~~Admin user management: screen/endpoints for admins to change any user's role and activate/deactivate accounts~~ — **done**
 8. ~~Neon migration: swap local Postgres for Neon in the deployed environment~~ — **done**
-9. ~~CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main~~ — **infra built, one manual step left**: the real Neon connection string still needs to be added to Secret Manager by hand (see CI/CD below), and the pipeline hasn't executed end-to-end yet — verify the first push to `main` actually deploys clean before calling this fully done.
+9. ~~CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main~~ — **done**. Verified end-to-end on 2026-08-26: backend live at
+   `https://podme-backend-uzmmmpgnvq-ue.a.run.app`, frontend at `https://podme-vet-app.web.app`,
+   frontend bundle confirmed pointing at the live backend URL.
 10. Polish: form validation, error handling, empty/loading states, local dev seed data — **current step**
 
 Open questions (ask the user before assuming, when relevant step comes up):
@@ -302,19 +304,28 @@ Secrets: `APP_KEY` and `DB_URL` live in Secret Manager (`podme-app-key`, `podme-
 as GitHub Actions secrets. The workflow fetches them as plain env vars via
 `google-github-actions/get-secretmanager-secrets` only where it must — running migrations
 directly from the runner — while Cloud Run mounts them itself via `--set-secrets`, so the
-running container's copy never passes through GitHub at all. **`podme-db-url` was seeded with
-a placeholder value ("REPLACE_ME") and still needs the real Neon connection string** — Claude
-can't read `backend/.env` (blocked by this environment's permissions), so it never saw the
-real string and couldn't set it. Run this once, with the same connection string from
-`backend/.env`'s `DB_URL` (the direct one, not `-pooler` — see step 8 above):
-```
-echo -n "postgresql://...?sslmode=require" | gcloud secrets versions add podme-db-url --data-file=- --project=dnd-friendly
-```
+running container's copy never passes through GitHub at all. `podme-db-url` was seeded with a
+placeholder ("REPLACE_ME") since Claude can't read `backend/.env` (blocked by this
+environment's permissions) — the user set the real Neon connection string afterward with
+`gcloud secrets versions add podme-db-url --data-file=- --project=dnd-friendly`.
 
 Migrations: run directly from the GitHub Actions runner as a `deploy-backend` step (not inside
 the Cloud Run container), straight against Neon over the public internet, before the Cloud Run
 deploy step — simpler than exec-ing into a running container or standing up a separate Cloud
-Run Job for what's currently a single-command need.
+Run Job for what's currently a single-command need. Needs `DB_CONNECTION=pgsql` set alongside
+`DB_URL` in that step's env — `config/database.php`'s default connection falls back to
+`sqlite` (`env('DB_CONNECTION', 'sqlite')`) when `DB_CONNECTION` isn't set, so `DB_URL` alone
+isn't enough to point the migrator at Postgres.
+
+Pitfalls hit getting the first deploy green (fixed, but worth knowing if similar errors show
+up again after touching this area): `composer.lock` had drifted to require PHP ≥8.4 (locked
+symfony 8.1.x) even though `composer.json`/this doc still said "PHP 8.3+" — CI and the
+Dockerfile both target PHP 8.4 to match; `tests/Unit` was an empty directory that existed
+locally but was never actually committed (git doesn't track empty directories), so a fresh CI
+checkout couldn't find it — fixed with a `.gitkeep`, and worth remembering the next time a
+`tests/*` subdirectory is added; the FrankenPHP base image has neither the PHP `zip` extension
+nor an `unzip` binary, so `composer install` in the Dockerfile failed until `apt-get install
+unzip` was added.
 
 Backend container: `PodMe/backend/Dockerfile` builds on FrankenPHP (`dunglas/frankenphp`)
 rather than hand-assembling nginx + php-fpm as separate processes — it's a single binary that
