@@ -36,8 +36,8 @@ Build order:
 4. ~~Pets: model/migration, relationship to User, full CRUD from the client role's perspective~~ — **done**
 5. ~~Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows~~ — **done**
 6. ~~Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients~~ — **done**
-7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts — **current step**
-8. Neon migration: swap local Postgres for Neon in the deployed environment
+7. ~~Admin user management: screen/endpoints for admins to change any user's role and activate/deactivate accounts~~ — **done**
+8. Neon migration: swap local Postgres for Neon in the deployed environment — **current step**
 9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main
 10. Polish: form validation, error handling, empty/loading states, local dev seed data
 
@@ -210,6 +210,39 @@ Starts collapsed as a "Notes" button; expanding lazy-loads that appointment's no
 open so idle appointment cards don't all fetch notes up front. `canWrite` only renders the
 add-note textarea/button for staff; clients get the read-only list. API calls in
 `src/lib/notes.ts`.
+
+**Admin user management (step 7)**: no create-account flow — users always self-register via
+`/api/register` (forced to `client`, per the RBAC section above), and admins only manage
+*existing* accounts: change any user's role (client/employee/admin) or toggle an `is_active`
+boolean. `is_active` was deliberately added as a plain boolean column (`database/migrations/
+..._add_is_active_to_users_table.php`, cast in `User::casts()`) rather than Laravel's
+SoftDeletes — a real on/off flag reads as exactly what it does, where SoftDeletes' automatic
+query-scope-hiding is designed for actual record deletion and could surprise other
+relations/queries later. Like `role`, `is_active` is left out of `Fillable`; `AuthController::
+login` rejects with a validation error if `$user->is_active` is false, and deactivating a user
+(`Admin\UserController::deactivate`) also calls `$user->tokens()->delete()` so every existing
+Sanctum token is revoked immediately rather than just blocking future logins.
+
+`app/Policies/UserPolicy.php` covers `viewAny`/`updateRole`/`activate`/`deactivate`, all
+admin-only — but the interesting rule isn't "who," it's "on whom": every method also checks
+`$user->id !== $target->id`, so an admin can't demote or deactivate their own account and
+accidentally lock out every admin. This is why the routes use plain `auth:sanctum` rather than
+`role:admin` middleware — the coarse role middleware can't express a per-record "except
+yourself" rule, only a real Policy can. Routes live under `/api/admin/users` in
+`App\Http\Controllers\Admin\UserController` (a new `Admin\` controller namespace, same
+convention as `Auth\AuthController`). Covered by
+`tests/Feature/Admin/UserManagementTest.php` (11 tests). One test-only caveat worth knowing:
+you can't prove "an old token stops working" by replaying it with a second HTTP call inside
+the same test method — Laravel's test client resolves the auth guard once per test and a
+second call can return the previously-cached user instead of re-validating the header, a
+testing-only artifact since a real server re-validates every request fresh. The test instead
+asserts the token row count drops to 0, which is what the controller code actually does.
+
+**Frontend admin UI**: `src/pages/AdminUsersPage.tsx` (`/admin/users`, gated via
+`<ProtectedRoute roles={['admin']}>`) lists every user with a role `<select>` and an Activate/
+Deactivate button per row; the signed-in admin's own row renders both controls `disabled`,
+mirroring the backend's self-protection rule (defense in depth — the server still enforces it
+regardless). API calls in `src/lib/admin.ts`.
 
 **Local dev database**: Homebrew Postgres 15 running locally, database `podme_dev`
 (`DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USERNAME=jpcyborg`, no

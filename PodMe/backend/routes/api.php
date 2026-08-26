@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\NoteController;
@@ -39,3 +40,12 @@ Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class
 // than a generic update.
 Route::get('/appointments/{appointment}/notes', [NoteController::class, 'index'])->middleware('auth:sanctum');
 Route::post('/appointments/{appointment}/notes', [NoteController::class, 'store'])->middleware('auth:sanctum');
+
+// Admin-only, but that's enforced by UserPolicy (via $this->authorize()
+// inside AdminUserController) rather than a 'role:admin' middleware here —
+// the policy also blocks an admin from acting on their own account, a
+// per-record rule the coarse middleware couldn't express.
+Route::get('/admin/users', [AdminUserController::class, 'index'])->middleware('auth:sanctum');
+Route::patch('/admin/users/{user}/role', [AdminUserController::class, 'updateRole'])->middleware('auth:sanctum');
+Route::patch('/admin/users/{user}/activate', [AdminUserController::class, 'activate'])->middleware('auth:sanctum');
+Route::patch('/admin/users/{user}/deactivate', [AdminUserController::class, 'deactivate'])->middleware('auth:sanctum');

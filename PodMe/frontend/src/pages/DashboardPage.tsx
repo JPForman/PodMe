@@ -49,6 +49,11 @@ export function DashboardPage() {
           {user.role === 'client' ? 'Your appointments' : 'View all appointments'}
         </Link>
       </p>
+      {user.role === 'admin' && (
+        <p>
+          <Link to="/admin/users">Manage users</Link>
+        </p>
+      )}
     </section>
   )
 }

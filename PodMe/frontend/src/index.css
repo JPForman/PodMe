@@ -194,6 +194,21 @@ code {
   font-size: 13px;
 }
 
+.role-badge-inactive {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.pet-card-actions select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
 .pets-page {
   max-width: 480px;
 }
