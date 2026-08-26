@@ -1,0 +1,102 @@
+# 🐾 PodMe
+
+A vet office management app for clients, pets, appointments, and visit notes — with
+role-based access for **admins**, **employees**, and **clients**.
+
+Built as a hands-on teaching project (an experienced JS/TS dev's first pass at PHP and
+Laravel), pairing a Laravel API backend with a React + TypeScript frontend.
+
+## Features
+
+- 🔐 **Auth** — token-based auth via Laravel Sanctum (register / login / logout)
+- 🧑‍🤝‍🧑 **Role-based access** — `admin` / `employee` / `client`, enforced server-side via
+  middleware and Eloquent Policies
+- 🐶 **Pets** — full CRUD, scoped to the owning client; staff can view all pets
+- 📅 **Appointments** — request / confirm / complete / cancel workflow with per-transition
+  authorization rules
+- 📝 **Visit notes** — immutable notes staff attach to appointments, read-only for clients
+- 🛠️ **Admin console** — change any user's role, activate/deactivate accounts
+
+## Tech stack
+
+| | |
+|---|---|
+| **Backend** | [Laravel 13](https://laravel.com) (PHP 8.3+), API-only, [Sanctum](https://laravel.com/docs/sanctum) auth |
+| **Frontend** | [React 19](https://react.dev) + TypeScript, built with [Vite](https://vitejs.dev) |
+| **Database** | Postgres ([Neon](https://neon.tech), serverless) |
+| **Target deploy** | Cloud Run (backend) · Firebase Hosting (frontend) · GitHub Actions (CI/CD) |
+
+The backend and frontend are independent projects with no shared tooling — they only talk to
+each other over HTTP.
+
+## Project structure
+
+```
+PodMe/
+├── backend/    # Laravel API (routes/api.php, app/Models, app/Http, app/Policies, tests/)
+└── frontend/   # React + TS app (src/pages, src/components, src/context, src/lib)
+```
+
+## Getting started
+
+### Prerequisites
+
+- PHP 8.3+ and [Composer](https://getcomposer.org)
+- Node.js and npm
+- A Postgres database (local or [Neon](https://neon.tech))
+
+### Backend setup
+
+```bash
+cd PodMe/backend
+composer install
+cp .env.example .env        # then set DB_URL to your Postgres connection string
+php artisan key:generate
+php artisan migrate
+php artisan serve           # http://127.0.0.1:8000
+```
+
+### Frontend setup
+
+```bash
+cd PodMe/frontend
+npm install
+npm run dev                 # http://localhost:5173
+```
+
+## Useful commands
+
+**Backend** (`PodMe/backend`)
+
+| Command | Description |
+|---|---|
+| `php artisan test` | Run the full test suite (in-memory SQLite, safe to run anytime) |
+| `php artisan migrate:fresh` | Drop all tables and re-run migrations |
+| `vendor/bin/pint` | Fix PHP code style |
+| `php artisan route:list` | Inspect all registered routes |
+| `php artisan tinker` | REPL with the app booted |
+
+**Frontend** (`PodMe/frontend`)
+
+| Command | Description |
+|---|---|
+| `npm run build` | Type-check and build for production |
+| `npm run lint` | Lint with oxlint |
+| `npm run preview` | Preview the production build locally |
+
+## Roles at a glance
+
+| Role | Can do |
+|---|---|
+| **Client** | Manage their own pets, request/cancel their own appointments, view visit notes |
+| **Employee** | View all pets/appointments, confirm/complete/cancel any appointment, write visit notes |
+| **Admin** | Everything employees can, plus manage user roles and activate/deactivate accounts |
+
+## Status
+
+Currently on **step 9** of the build: CI/CD via GitHub Actions. See
+[`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture notes, and design decisions.
+
+## License
+
+Personal/educational project — no license specified yet.

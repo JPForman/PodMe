@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Write non verbose code. When appropriate, make sure to use global variables for css and use reusable components.
 
+Update the root README.md file when appropriate.
+
 ## Project
 
 A vet office management app (clients/pets/appointments/visit notes with role-based access:
