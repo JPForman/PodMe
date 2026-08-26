@@ -2,7 +2,9 @@
 # container doesn't need separately-configured nginx + php-fpm processes.
 FROM dunglas/frankenphp:php8.4
 
-RUN install-php-extensions pdo_pgsql opcache
+RUN install-php-extensions pdo_pgsql opcache \
+    && apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
