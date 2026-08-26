@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "dnd-friendly"
+  },
+  "targets": {
+    "dnd-friendly": {
+      "hosting": {
+        "podme": ["podme-vet-app"]
+      }
+    }
+  }
+}

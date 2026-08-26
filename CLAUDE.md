@@ -22,10 +22,11 @@ they only talk to each other over HTTP.
 - `PodMe/backend` — Laravel 13, API-only (REST), PHP 8.3+
 - `PodMe/frontend` — React 19 + TypeScript, built with Vite
 
-Target deployment (not yet wired up): Neon (Postgres) for the backend's DB, Cloud Run for
-the backend container, Firebase Hosting for the frontend static build, GitHub Actions for
-CI/CD. The whole stack is meant to run on free tiers — flag it before adding anything
-(file uploads, email/SMS, etc.) that would require a paid service.
+Target deployment: Neon (Postgres) for the backend's DB, Cloud Run for the backend
+container, Firebase Hosting for the frontend static build, GitHub Actions for CI/CD — see
+CI/CD (step 9) below for how these are wired together. The whole stack is meant to run on
+free tiers — flag it before adding anything (file uploads, email/SMS, etc.) that would
+require a paid service.
 
 ## Plan & progress
 
@@ -40,8 +41,8 @@ Build order:
 6. ~~Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients~~ — **done**
 7. ~~Admin user management: screen/endpoints for admins to change any user's role and activate/deactivate accounts~~ — **done**
 8. ~~Neon migration: swap local Postgres for Neon in the deployed environment~~ — **done**
-9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main — **current step**
-10. Polish: form validation, error handling, empty/loading states, local dev seed data
+9. ~~CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main~~ — **infra built, one manual step left**: the real Neon connection string still needs to be added to Secret Manager by hand (see CI/CD below), and the pipeline hasn't executed end-to-end yet — verify the first push to `main` actually deploys clean before calling this fully done.
+10. Polish: form validation, error handling, empty/loading states, local dev seed data — **current step**
 
 Open questions (ask the user before assuming, when relevant step comes up):
 - Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
@@ -261,3 +262,65 @@ directly — ask the user to make `.env` changes themselves when needed. Don't t
 always shows the unparsed default; check `DB::connection()->getConfig('host')` instead, which
 reflects the actual resolved connection. Tests are unaffected either way — they always run
 against in-memory SQLite regardless of `.env` (see Commands below).
+
+**CI/CD (step 9)**: one workflow, `.github/workflows/ci-cd.yml`, four jobs. `test-backend` /
+`test-frontend` run on every PR and every push to `main` (build+test only). `deploy-backend` /
+`deploy-frontend` are gated to `push` events on `main` via `needs:` on their test job;
+`deploy-frontend` also depends on `deploy-backend` specifically so it can inject the
+just-deployed Cloud Run URL into the frontend build as `VITE_API_URL` (the URL isn't knowable
+before the service exists). `API_URL` in `src/lib/api.ts` now reads
+`import.meta.env.VITE_API_URL`, falling back to `http://127.0.0.1:8000` for local dev — see
+`src/vite-env.d.ts` for the type declaration Vite needs for a custom env var.
+
+GCP project: reused the existing `dnd-friendly` project (already running an unrelated app)
+rather than a fresh one — creating a new project hit a "linked projects" quota on the billing
+account, and switching billing accounts was more setup than the teaching goal called for.
+PodMe's resources are name-prefixed (`podme-*`) and IAM-isolated from the sibling app rather
+than sharing its service accounts: own Artifact Registry repo (`podme-backend`, `us-east1`),
+own Cloud Run service (`podme-backend`), own Firebase Hosting site (`podme-vet-app` —
+Firebase Hosting supports multiple independently-addressable sites per project, so this
+doesn't need to share the project's default site or its `*.web.app` domain), and two
+dedicated service accounts:
+- `podme-deployer` — what GitHub Actions authenticates as. Has `run.admin`,
+  `artifactregistry.writer`, `firebasehosting.admin` at the project level (these operations
+  don't support finer-grained resource-scoped roles), plus `iam.serviceAccountUser` scoped
+  only to `podme-backend-runtime` (a per-service-account IAM binding, not a project-level
+  role) so it can deploy Cloud Run as that identity without being able to impersonate the
+  sibling app's service accounts too.
+- `podme-backend-runtime` — the identity Cloud Run actually runs as at request time. Only
+  holds `secretmanager.secretAccessor`, and only on the two secrets below.
+
+Auth: Workload Identity Federation, not a downloaded service-account JSON key — GitHub's OIDC
+token exchanges for short-lived GCP credentials, so there's no long-lived credential sitting in
+a GitHub secret at all. Reused the existing `github-pool` WIF pool (just a shared OIDC trust
+root, no per-app exposure) but added a new provider, `github-provider-podme`, with its own
+`attributeCondition` (`assertion.repository=='JPForman/PodMe'`) rather than widening the
+sibling app's existing provider — so a compromised PodMe Actions run can't mint credentials
+for the other app's deployer, or vice versa.
+
+Secrets: `APP_KEY` and `DB_URL` live in Secret Manager (`podme-app-key`, `podme-db-url`), not
+as GitHub Actions secrets. The workflow fetches them as plain env vars via
+`google-github-actions/get-secretmanager-secrets` only where it must — running migrations
+directly from the runner — while Cloud Run mounts them itself via `--set-secrets`, so the
+running container's copy never passes through GitHub at all. **`podme-db-url` was seeded with
+a placeholder value ("REPLACE_ME") and still needs the real Neon connection string** — Claude
+can't read `backend/.env` (blocked by this environment's permissions), so it never saw the
+real string and couldn't set it. Run this once, with the same connection string from
+`backend/.env`'s `DB_URL` (the direct one, not `-pooler` — see step 8 above):
+```
+echo -n "postgresql://...?sslmode=require" | gcloud secrets versions add podme-db-url --data-file=- --project=dnd-friendly
+```
+
+Migrations: run directly from the GitHub Actions runner as a `deploy-backend` step (not inside
+the Cloud Run container), straight against Neon over the public internet, before the Cloud Run
+deploy step — simpler than exec-ing into a running container or standing up a separate Cloud
+Run Job for what's currently a single-command need.
+
+Backend container: `PodMe/backend/Dockerfile` builds on FrankenPHP (`dunglas/frankenphp`)
+rather than hand-assembling nginx + php-fpm as separate processes — it's a single binary that
+serves the app directly, which is Laravel's own current recommendation for containerizing
+without extra process-supervision config (a rough JS analogue: one process serving requests,
+like Fastify's built-in server, instead of nginx reverse-proxying to a separate app process).
+Trade-off worth knowing: no `config:cache`/`route:cache` at container startup — skipped for
+simplicity, since config is just read fresh from Cloud Run's injected env vars on every
+request, which is fine at this app's traffic level.

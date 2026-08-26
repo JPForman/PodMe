@@ -1,0 +1,144 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  GCP_PROJECT: dnd-friendly
+  GCP_REGION: us-east1
+  WIF_PROVIDER: projects/788375978028/locations/global/workloadIdentityPools/github-pool/providers/github-provider-podme
+  DEPLOYER_SA: podme-deployer@dnd-friendly.iam.gserviceaccount.com
+  RUNTIME_SA: podme-backend-runtime@dnd-friendly.iam.gserviceaccount.com
+  ARTIFACT_REPO: us-east1-docker.pkg.dev/dnd-friendly/podme-backend/backend
+  CLOUD_RUN_SERVICE: podme-backend
+  FIREBASE_PROJECT: dnd-friendly
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PodMe/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+      - run: php artisan test
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PodMe/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  deploy-backend:
+    needs: test-backend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        run: |
+          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+          IMAGE="${{ env.ARTIFACT_REPO }}:${{ github.sha }}"
+          docker build -t "$IMAGE" PodMe/backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Fetch secrets for migration
+        id: secrets
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            DB_URL:${{ env.GCP_PROJECT }}/podme-db-url
+            APP_KEY:${{ env.GCP_PROJECT }}/podme-app-key
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_pgsql
+
+      - name: Run database migrations
+        working-directory: PodMe/backend
+        env:
+          DB_CONNECTION: pgsql
+          DB_URL: ${{ steps.secrets.outputs.DB_URL }}
+          APP_KEY: ${{ steps.secrets.outputs.APP_KEY }}
+        run: |
+          composer install --no-interaction --prefer-dist --no-dev
+          php artisan migrate --force
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        run: |
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+            --image="$IMAGE" \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --service-account=${{ env.RUNTIME_SA }} \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --memory=512Mi \
+            --set-secrets=APP_KEY=podme-app-key:latest,DB_URL=podme-db-url:latest \
+            --set-env-vars=APP_ENV=production,APP_DEBUG=false,DB_CONNECTION=pgsql,LOG_CHANNEL=stderr,SESSION_DRIVER=database,CACHE_STORE=database,QUEUE_CONNECTION=sync
+          URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE }} --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT }} --format='value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  deploy-frontend:
+    needs: [test-frontend, deploy-backend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build
+        working-directory: PodMe/frontend
+        env:
+          VITE_API_URL: ${{ needs.deploy-backend.outputs.service_url }}
+        run: |
+          npm ci
+          npm run build
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Deploy to Firebase Hosting
+        working-directory: PodMe/frontend
+        run: npx firebase-tools deploy --only hosting:podme --project ${{ env.FIREBASE_PROJECT }} --non-interactive

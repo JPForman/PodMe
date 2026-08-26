@@ -94,8 +94,12 @@ npm run dev                 # http://localhost:5173
 
 ## Status
 
-Currently on **step 9** of the build: CI/CD via GitHub Actions. See
-[`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture notes, and design decisions.
+Currently on **step 10** of the build: polish (validation, error/loading states, seed data).
+CI/CD (step 9) is wired up — GitHub Actions tests every PR and, on merge to `main`, deploys
+the backend to Cloud Run and the frontend to Firebase Hosting — but one manual setup step
+(adding the real Neon connection string to Secret Manager) is still needed before the first
+deploy will succeed. See [`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture
+notes, and design decisions.
 
 ## License
 
