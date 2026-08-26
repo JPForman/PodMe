@@ -44,7 +44,7 @@ Build order:
 9. ~~CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main~~ — **done**. Verified end-to-end on 2026-08-26: backend live at
    `https://podme-backend-uzmmmpgnvq-ue.a.run.app`, frontend at `https://podme-vet-app.web.app`,
    frontend bundle confirmed pointing at the live backend URL.
-10. Polish: form validation, error handling, empty/loading states, local dev seed data — **current step**
+10. ~~Polish: form validation, error handling, empty/loading states, local dev seed data~~ — **done**
 
 Open questions (ask the user before assuming, when relevant step comes up):
 - Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
@@ -335,3 +335,33 @@ like Fastify's built-in server, instead of nginx reverse-proxying to a separate 
 Trade-off worth knowing: no `config:cache`/`route:cache` at container startup — skipped for
 simplicity, since config is just read fresh from Cloud Run's injected env vars on every
 request, which is fine at this app's traffic level.
+
+**Polish (step 10)**: `database/seeders/DatabaseSeeder.php` now seeds one login per role
+(`admin@podme.test` / `employee@podme.test` / `client@podme.test`, plus a deactivated
+`inactive@podme.test`, all password `password`) via `User::factory()->create([...])`, using
+the same factories `tests/Feature/*` already relied on
+(`database/factories/{User,Pet,Appointment,Note}Factory.php`). Worth knowing: Eloquent
+factories instantiate models inside `Model::unguarded()`, so passing `role`/`is_active` to
+`create()` works even though both are deliberately excluded from `User`'s `Fillable` — mass-
+assignment protection only applies to attributes coming from request input, not factory-built
+models. The client login gets two pets and one appointment in each status (requested/
+confirmed/completed/cancelled, with notes on the confirmed and completed ones) so every screen
+has something to render without registering accounts by hand. Run `php artisan migrate:fresh
+--seed` to reset.
+
+`PetForm`/`AppointmentForm` now surface **per-field** backend validation errors (they only
+showed `ApiError.message` as one generic string before) — same `error={errors.field?.[0]}`
+pattern `RegisterPage` already used, now applied consistently. `FormField` grew optional
+`min`/`step` passthroughs for this: the weight input needed `step="any"` because the browser's
+default `step="1"` on `<input type="number">` silently blocks submitting a fractional value
+(a real bug this surfaced — editing a pet with a decimal weight like `52.62` couldn't be saved
+at all, since native HTML5 validation rejected it before the request ever went out); the
+appointment datetime input got `min={now}` so the browser blocks picking a past time up front,
+mirroring `StoreAppointmentRequest`'s `after:now` rule instead of only catching it after a
+round-trip. Every page that gated on `isLoading` returned `null` (a blank flash on every
+navigation, including `ProtectedRoute` on every protected route) — replaced with a
+`.loading-text` message. `PetsPage`'s delete button had no confirmation and no pending state
+(a misclick permanently deleted a pet with no undo); it now calls `window.confirm()` first and
+disables the row's buttons while the request is in flight, and `AppointmentsPage`'s
+confirm/complete/cancel transitions got the same per-row pending-disable treatment to prevent
+double-submits from a slow network.

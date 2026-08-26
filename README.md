@@ -53,8 +53,13 @@ composer install
 cp .env.example .env        # then set DB_URL to your Postgres connection string
 php artisan key:generate
 php artisan migrate
+php artisan db:seed         # optional: creates one login per role, password "password"
 php artisan serve           # http://127.0.0.1:8000
 ```
+
+Seeded logins (all password `password`): `admin@podme.test`, `employee@podme.test`,
+`client@podme.test` (comes with sample pets/appointments/notes), `inactive@podme.test`
+(deactivated, to test the login-blocked case).
 
 ### Frontend setup
 
@@ -94,10 +99,11 @@ npm run dev                 # http://localhost:5173
 
 ## Status
 
-Currently on **step 10** of the build: polish (validation, error/loading states, seed data).
-CI/CD (step 9) is live and verified — GitHub Actions tests every PR and, on merge to `main`,
-deploys the backend to Cloud Run and the frontend to Firebase Hosting. See
-[`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture notes, and design decisions.
+All 10 planned build steps are done: auth, RBAC, pets/appointments/notes, admin user
+management, Neon migration, CI/CD, and polish (validation, error/loading states, seed data).
+CI/CD is live and verified — GitHub Actions tests every PR and, on merge to `main`, deploys
+the backend to Cloud Run and the frontend to Firebase Hosting. See [`CLAUDE.md`](./CLAUDE.md)
+for the full build plan, architecture notes, and design decisions.
 
 ## License
 

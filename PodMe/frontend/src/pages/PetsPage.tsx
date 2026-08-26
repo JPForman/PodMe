@@ -13,6 +13,7 @@ export function PetsPage() {
   const [error, setError] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -38,11 +39,19 @@ export function PetsPage() {
 
   async function handleDelete(id: number) {
     if (!token) return
-    await deletePet(id, token)
-    setPets((prev) => prev.filter((p) => p.id !== id))
+    if (!window.confirm('Delete this pet? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      await deletePet(id, token)
+      setPets((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to delete pet.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  if (isLoading) return null
+  if (isLoading) return <p className="loading-text">Loading pets...</p>
 
   return (
     <section className="auth-page pets-page">
@@ -83,11 +92,15 @@ export function PetsPage() {
                 {!isClient && pet.owner && <p>Owner: {pet.owner.name}</p>}
                 {isClient && (
                   <div className="pet-card-actions">
-                    <button className="btn" onClick={() => setEditingId(pet.id)}>
+                    <button className="btn" onClick={() => setEditingId(pet.id)} disabled={deletingId === pet.id}>
                       Edit
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleDelete(pet.id)}>
-                      Delete
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleDelete(pet.id)}
+                      disabled={deletingId === pet.id}
+                    >
+                      {deletingId === pet.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 )}

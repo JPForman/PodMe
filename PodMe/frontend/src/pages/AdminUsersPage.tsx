@@ -42,7 +42,7 @@ export function AdminUsersPage() {
     }
   }
 
-  if (isLoading) return null
+  if (isLoading) return <p className="loading-text">Loading users...</p>
 
   return (
     <section className="auth-page pets-page">

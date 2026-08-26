@@ -6,7 +6,7 @@ import type { Role } from '../lib/api'
 export function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: Role[] }) {
   const { user, isLoading } = useAuth()
 
-  if (isLoading) return null
+  if (isLoading) return <p className="loading-text">Loading...</p>
   if (!user) return <Navigate to="/login" replace />
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />
 

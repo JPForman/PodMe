@@ -157,6 +157,12 @@ code {
   font-size: 13px;
 }
 
+.loading-text {
+  color: var(--text);
+  text-align: center;
+  margin: 64px auto;
+}
+
 .btn {
   padding: 10px 16px;
   border-radius: 6px;

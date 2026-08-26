@@ -6,6 +6,8 @@ type FormFieldProps = {
   error?: string
   required?: boolean
   multiline?: boolean
+  min?: string
+  step?: string
 }
 
 export function FormField({
@@ -16,6 +18,8 @@ export function FormField({
   error,
   required = true,
   multiline = false,
+  min,
+  step,
 }: FormFieldProps) {
   return (
     <label className="field">
@@ -28,6 +32,8 @@ export function FormField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={required}
+          min={min}
+          step={step}
         />
       )}
       {error && <em className="field-error">{error}</em>}

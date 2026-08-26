@@ -31,6 +31,7 @@ export function AppointmentsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [isRequesting, setIsRequesting] = useState(false)
+  const [pendingId, setPendingId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -52,11 +53,18 @@ export function AppointmentsPage() {
 
   async function handleTransition(action: (id: number, token: string) => Promise<Appointment>, id: number) {
     if (!token) return
-    const updated = await action(id, token)
-    setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)))
+    setPendingId(id)
+    try {
+      const updated = await action(id, token)
+      setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update appointment.')
+    } finally {
+      setPendingId(null)
+    }
   }
 
-  if (isLoading) return null
+  if (isLoading) return <p className="loading-text">Loading appointments...</p>
 
   return (
     <section className="auth-page pets-page">
@@ -87,18 +95,27 @@ export function AppointmentsPage() {
             {!isClient && appointment.pet?.owner && <p>Owner: {appointment.pet.owner.name}</p>}
             <div className="pet-card-actions">
               {!isClient && appointment.status === 'requested' && (
-                <button className="btn" onClick={() => handleTransition(confirmAppointment, appointment.id)}>
+                <button
+                  className="btn"
+                  disabled={pendingId === appointment.id}
+                  onClick={() => handleTransition(confirmAppointment, appointment.id)}
+                >
                   Confirm
                 </button>
               )}
               {!isClient && appointment.status === 'confirmed' && (
-                <button className="btn" onClick={() => handleTransition(completeAppointment, appointment.id)}>
+                <button
+                  className="btn"
+                  disabled={pendingId === appointment.id}
+                  onClick={() => handleTransition(completeAppointment, appointment.id)}
+                >
                   Mark completed
                 </button>
               )}
               {(appointment.status === 'requested' || appointment.status === 'confirmed') && (
                 <button
                   className="btn btn-secondary"
+                  disabled={pendingId === appointment.id}
                   onClick={() => handleTransition(cancelAppointment, appointment.id)}
                 >
                   Cancel
