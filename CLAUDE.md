@@ -34,16 +34,22 @@ Build order:
 2. ~~Auth: Sanctum setup, signup/login/logout, `role` field on the user model~~ — **done**
 3. ~~RBAC: role-checking middleware, reflected in frontend UI (real enforcement stays server-side)~~ — **done**
 4. ~~Pets: model/migration, relationship to User, full CRUD from the client role's perspective~~ — **done**
-5. Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows — **current step**
-6. Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients
+5. ~~Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows~~ — **done**
+6. Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients — **current step**
 7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts
 8. Neon migration: swap local Postgres for Neon in the deployed environment
 9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main
 10. Polish: form validation, error handling, empty/loading states, local dev seed data
 
 Open questions (ask the user before assuming, when relevant step comes up):
-- Whether appointment scheduling needs double-booking prevention in MVP, or a plain date/time field is enough
 - Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
+
+Deferred (deliberately out of MVP scope, revisit later):
+- **Double-booking prevention for appointments.** Step 5 shipped with a plain `scheduled_at`
+  datetime and no overlap validation — the user explicitly asked to flag this so it isn't
+  forgotten. When picked up: decide whether conflicts are checked per-employee or clinic-wide
+  (moot today since there's no per-appointment employee assignment — see Architecture below),
+  and whether it's a hard validation error or just a warning.
 
 ## Commands
 
@@ -121,18 +127,60 @@ role to return either `$user->pets` (client) or all pets with `owner` eager-load
 Validation is in `app/Http/Requests/Pet/{Store,Update}PetRequest.php`. Covered by
 `tests/Feature/Pets/PetTest.php` (ownership, staff visibility, and validation, 14 tests).
 
+**Appointments (step 5)**: `app/Models/Appointment.php` (`pet_id` FK, `status` string —
+`STATUS_REQUESTED`/`CONFIRMED`/`COMPLETED`/`CANCELLED` constants, `scheduled_at` datetime,
+`reason` optional text) `belongsTo` `Pet::pet()`; `Pet::appointments()` is the inverse
+`hasMany`. No employee-assignment field — any admin/employee can view and act on any
+appointment (shared staff access, same model as Pets staff visibility), so there's no
+per-appointment owner among staff. `pet_id` and `status` are both left out of `Fillable` (same
+pattern as `owner_id`/`role` elsewhere) — `pet_id` is set via `$appointment->pet()->associate()`
+and `status` via direct property assignment, never mass assignment, since both matter for
+authorization and must never come from client input.
+
+Status changes are **not** a generic `update` endpoint — each transition
+(`confirm`/`complete`/`cancel`) is its own route (`PATCH /api/appointments/{id}/{action}`) and
+its own `AppointmentPolicy` method. This splits "who is allowed to attempt this transition"
+(the Policy's job, 403 on failure) from "does the appointment's current status allow it" (a
+plain check in `AppointmentController` returning 422 on failure) — a deliberate teaching
+example of separating authorization from business-rule validation. Rules: clients
+request/cancel only for their own pets; only staff confirm/complete; either side can cancel
+until `completed`. `create` on `AppointmentPolicy` takes the target `Pet` as a second argument
+(`$this->authorize('create', [Appointment::class, $pet])`), the standard Laravel pattern for
+"can this user create X" checks that depend on a related model rather than the new record
+itself. Every response that returns an appointment eager-loads `pet.owner:id,name,email` —
+easy to forget on the confirm/complete/cancel actions specifically, since those look up the
+model via route binding rather than a query that already joins it; forgetting it silently
+drops the pet/owner info the frontend cards render. Covered by
+`tests/Feature/Appointments/AppointmentTest.php` (16 tests: ownership, staff-only transitions,
+status-transition validation, staff visibility).
+
 **Frontend auth**: `src/context/AuthContext.tsx` holds `{ user, token }` (persisted to
 `localStorage`) with `login`/`register`/`logout`, backed by a small fetch wrapper in
 `src/lib/api.ts` (`apiFetch`, `ApiError`). `src/routes/ProtectedRoute.tsx` redirects to
 `/login` when logged out, and accepts an optional `roles` prop for gating a route to specific
 roles client-side — this is convenience/UX only, since real enforcement is server-side.
-Pages: `LoginPage`, `RegisterPage`, `DashboardPage`, `PetsPage` (routed in `App.tsx` via
-`react-router-dom`); `DashboardPage` renders different placeholder content per role and links
-to `/pets`. `PetsPage` renders either an editable list (client, via the reusable `PetForm`
-component for both create and edit) or a read-only list with owner name (staff); API calls
-live in `src/lib/pets.ts`. `FormField` (`src/components/FormField.tsx`) grew `required` and
-`multiline` props to support Pet's optional fields and the notes textarea, kept
-backwards-compatible with the existing Auth forms (both default to the old behavior).
+Pages: `LoginPage`, `RegisterPage`, `DashboardPage`, `PetsPage`, `AppointmentsPage` (routed in
+`App.tsx` via `react-router-dom`); `DashboardPage` renders different placeholder content per
+role and links to `/pets` and `/appointments`. `PetsPage` renders either an editable list
+(client, via the reusable `PetForm` component for both create and edit) or a read-only list
+with owner name (staff); API calls live in `src/lib/pets.ts`. `AppointmentsPage` mirrors that
+pattern: clients get a `AppointmentForm` to request one (pet picked from their own
+`listPets()` results) plus Cancel on their own; staff get Confirm/Mark completed/Cancel
+depending on status, no create form; API calls in `src/lib/appointments.ts`. `FormField`
+(`src/components/FormField.tsx`) grew `required` and `multiline` props to support Pet's
+optional fields and the notes textarea, kept backwards-compatible with the existing Auth forms
+(both default to the old behavior).
+
+**No timezone concept in scheduling**: `scheduled_at` is a plain datetime with no timezone
+handling anywhere in the stack (single physical office, not a multi-timezone concern). This
+matters for display: `Appointment::casts()` marks `scheduled_at` as `datetime`, so Eloquent
+always serializes it with a `Z` (UTC) suffix even though no real timezone conversion happened.
+Rendering it with `new Date(iso).toLocaleString()` on the frontend would silently reinterpret
+those UTC-labeled digits through the browser's local offset and display the wrong time — hit
+this exact bug during manual testing. Fixed by `formatScheduledAt()` in
+`src/lib/appointments.ts`, which builds the `Date` from the literal digits (year/month/day/
+hour/minute) instead of parsing the ISO string, so the displayed time always matches what was
+entered regardless of the viewer's timezone.
 
 **Local dev database**: Homebrew Postgres 15 running locally, database `podme_dev`
 (`DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USERNAME=jpcyborg`, no

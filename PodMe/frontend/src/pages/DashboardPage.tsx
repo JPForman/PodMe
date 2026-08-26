@@ -44,6 +44,11 @@ export function DashboardPage() {
       <p>
         <Link to="/pets">{user.role === 'client' ? 'Manage your pets' : 'View all pets'}</Link>
       </p>
+      <p>
+        <Link to="/appointments">
+          {user.role === 'client' ? 'Your appointments' : 'View all appointments'}
+        </Link>
+      </p>
     </section>
   )
 }

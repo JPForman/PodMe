@@ -135,6 +135,7 @@ code {
 }
 
 .field input,
+.field select,
 .field textarea {
   padding: 8px 10px;
   border: 1px solid var(--border);
