@@ -37,8 +37,8 @@ Build order:
 5. ~~Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows~~ — **done**
 6. ~~Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients~~ — **done**
 7. ~~Admin user management: screen/endpoints for admins to change any user's role and activate/deactivate accounts~~ — **done**
-8. Neon migration: swap local Postgres for Neon in the deployed environment — **current step**
-9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main
+8. ~~Neon migration: swap local Postgres for Neon in the deployed environment~~ — **done**
+9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main — **current step**
 10. Polish: form validation, error handling, empty/loading states, local dev seed data
 
 Open questions (ask the user before assuming, when relevant step comes up):
@@ -244,8 +244,18 @@ Deactivate button per row; the signed-in admin's own row renders both controls `
 mirroring the backend's self-protection rule (defense in depth — the server still enforces it
 regardless). API calls in `src/lib/admin.ts`.
 
-**Local dev database**: Homebrew Postgres 15 running locally, database `podme_dev`
-(`DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USERNAME=jpcyborg`, no
-password — local trust auth) — not the SQLite Laravel defaults to out of the box. This
-environment's permission settings block reading or editing `backend/.env` directly — ask the
-user to make `.env` changes themselves when needed.
+**Database (step 8 — Neon)**: local dev and the future deployed environment both point at the
+same Neon (serverless Postgres) project now — there's no separate local Postgres anymore.
+`config/database.php`'s `pgsql` connection already supported a `DB_URL` env var and an
+`sslmode` option out of the box (Laravel default config, untouched), so the only change was
+`.env`: `DB_URL` set to Neon's connection string (`postgresql://...?sslmode=require` — Laravel's
+`ConfigurationUrlParser` aliases both `postgres://` and `postgresql://` to the `pgsql` driver,
+so Neon's string works unmodified). Use Neon's **direct** connection string, not the pooled
+`-pooler` one — PgBouncer in transaction mode doesn't support everything Laravel's migrator
+needs. This environment's permission settings block reading or editing `backend/.env`
+directly — ask the user to make `.env` changes themselves when needed. Don't trust
+`config('database.connections.pgsql.host')` to verify which DB is active — Laravel only merges
+`DB_URL` into the config at connection-build time, not into the raw config array, so that call
+always shows the unparsed default; check `DB::connection()->getConfig('host')` instead, which
+reflects the actual resolved connection. Tests are unaffected either way — they always run
+against in-memory SQLite regardless of `.env` (see Commands below).
