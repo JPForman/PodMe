@@ -35,8 +35,8 @@ Build order:
 3. ~~RBAC: role-checking middleware, reflected in frontend UI (real enforcement stays server-side)~~ — **done**
 4. ~~Pets: model/migration, relationship to User, full CRUD from the client role's perspective~~ — **done**
 5. ~~Appointments: model/migration, relationships to Pet and User(s), status field, request/view/cancel (client) and view/update (employee) flows~~ — **done**
-6. Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients — **current step**
-7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts
+6. ~~Notes: model/migration, relationship to Pet/Appointment, write access for employees/admins, read-only for clients~~ — **done**
+7. Admin employee management: screen/endpoints for admins to create/deactivate employee accounts — **current step**
 8. Neon migration: swap local Postgres for Neon in the deployed environment
 9. CI/CD: GitHub Actions — test/build on PR, deploy frontend to Firebase Hosting and backend to Cloud Run on merge to main
 10. Polish: form validation, error handling, empty/loading states, local dev seed data
@@ -180,7 +180,36 @@ those UTC-labeled digits through the browser's local offset and display the wron
 this exact bug during manual testing. Fixed by `formatScheduledAt()` in
 `src/lib/appointments.ts`, which builds the `Date` from the literal digits (year/month/day/
 hour/minute) instead of parsing the ISO string, so the displayed time always matches what was
-entered regardless of the viewer's timezone.
+entered regardless of the viewer's timezone. `Note::created_at` doesn't need this treatment —
+it's a genuine server-generated instant rather than user-entered wall-clock time, so the
+frontend renders it with plain `new Date(...).toLocaleDateString()` and lets real UTC-to-local
+conversion happen.
+
+**Notes (step 6)**: `app/Models/Note.php` (`appointment_id` FK, `author_id` FK to `users`,
+`content` text) `belongsTo` both `Appointment::appointment()` and `User::author()`;
+`Appointment::notes()` is the inverse `hasMany`. Notes are nested under their appointment
+rather than a flat `/api/notes` resource (`GET/POST /api/appointments/{appointment}/notes` in
+`app/Http/Controllers/NoteController.php`) since a note only ever makes sense in the context
+of one visit — the same reasoning as the appointment status actions. There is no
+update/destroy: notes are an intentional immutable visit record once written. `NotePolicy`
+only defines `create(User, Appointment)` (staff-only, same "second-argument context" pattern
+as `AppointmentPolicy::create`) — viewing is gated by reusing `AppointmentPolicy::view` in
+`NoteController::index` (if you can see the appointment, you can see its notes; clients
+read-only, staff any), so there's no separate view-permission logic to duplicate.
+`app/Http/Requests/Note/StoreNoteRequest.php` validates `content`. `author_id` and
+`appointment_id` are left out of `Fillable` (same pattern as `pet_id`/`status` on Appointment)
+— set via `$note->appointment()->associate()` / `$note->author()->associate($request->user())`.
+Covered by `tests/Feature/Notes/NoteTest.php` (8 tests: staff-only write, client read-only
+scoped to their own pets, validation).
+
+**Frontend notes UI**: `src/components/NotesSection.tsx` is self-contained (unlike `PetForm`/
+`AppointmentForm`, which are pure forms driven by the parent page) — it reads `useAuth()`
+directly and manages its own fetch/expand/submit state, rendered per-appointment-card in
+`AppointmentsPage` as `<NotesSection appointmentId={appointment.id} canWrite={!isClient} />`.
+Starts collapsed as a "Notes" button; expanding lazy-loads that appointment's notes on first
+open so idle appointment cards don't all fetch notes up front. `canWrite` only renders the
+add-note textarea/button for staff; clients get the read-only list. API calls in
+`src/lib/notes.ts`.
 
 **Local dev database**: Homebrew Postgres 15 running locally, database `podme_dev`
 (`DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USERNAME=jpcyborg`, no

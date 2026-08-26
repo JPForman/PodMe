@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppointmentForm } from '../components/AppointmentForm'
+import { NotesSection } from '../components/NotesSection'
 import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../lib/api'
 import {
@@ -104,6 +105,7 @@ export function AppointmentsPage() {
                 </button>
               )}
             </div>
+            <NotesSection appointmentId={appointment.id} canWrite={!isClient} />
           </li>
         ))}
       </ul>

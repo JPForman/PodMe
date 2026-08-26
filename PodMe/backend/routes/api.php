@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\NoteController;
 use App\Http\Controllers\PetController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -31,3 +32,10 @@ Route::apiResource('appointments', AppointmentController::class)->only(['index',
 Route::patch('/appointments/{appointment}/confirm', [AppointmentController::class, 'confirm'])->middleware('auth:sanctum');
 Route::patch('/appointments/{appointment}/complete', [AppointmentController::class, 'complete'])->middleware('auth:sanctum');
 Route::patch('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])->middleware('auth:sanctum');
+
+// Notes are nested under their appointment (never a flat /notes resource)
+// since they only ever make sense in the context of one visit — the same
+// reasoning that keeps confirm/complete/cancel as their own routes rather
+// than a generic update.
+Route::get('/appointments/{appointment}/notes', [NoteController::class, 'index'])->middleware('auth:sanctum');
+Route::post('/appointments/{appointment}/notes', [NoteController::class, 'store'])->middleware('auth:sanctum');

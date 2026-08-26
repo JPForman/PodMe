@@ -242,3 +242,49 @@ code {
   gap: 8px;
   margin-top: 8px;
 }
+
+.notes-section {
+  margin-top: 8px;
+}
+
+.notes-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.note-item p {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.note-meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-form textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  resize: vertical;
+  min-height: 50px;
+}
