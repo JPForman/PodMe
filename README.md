@@ -22,7 +22,7 @@ Laravel), pairing a Laravel API backend with a React + TypeScript frontend.
 | | |
 |---|---|
 | **Backend** | [Laravel 13](https://laravel.com) (PHP 8.3+), API-only, [Sanctum](https://laravel.com/docs/sanctum) auth |
-| **Frontend** | [React 19](https://react.dev) + TypeScript, built with [Vite](https://vitejs.dev) |
+| **Frontend** | [React 19](https://react.dev) + TypeScript, built with [Vite](https://vitejs.dev), [lucide-react](https://lucide.dev) icons |
 | **Database** | Postgres ([Neon](https://neon.tech), serverless) |
 | **Target deploy** | Cloud Run (backend) · Firebase Hosting (frontend) · GitHub Actions (CI/CD) |
 
@@ -102,8 +102,10 @@ npm run dev                 # http://localhost:5173
 All 10 planned build steps are done: auth, RBAC, pets/appointments/notes, admin user
 management, Neon migration, CI/CD, and polish (validation, error/loading states, seed data).
 CI/CD is live and verified — GitHub Actions tests every PR and, on merge to `main`, deploys
-the backend to Cloud Run and the frontend to Firebase Hosting. See [`CLAUDE.md`](./CLAUDE.md)
-for the full build plan, architecture notes, and design decisions.
+the backend to Cloud Run and the frontend to Firebase Hosting. The frontend also has a
+vet-clinic-themed visual pass — persistent header/nav/footer, warm color palette, hero/service
+sections on the homepage, and photography sourced from Unsplash. See
+[`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture notes, and design decisions.
 
 ## License
 

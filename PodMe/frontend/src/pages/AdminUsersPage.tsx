@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ShieldCheck, UserX, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { activateUser, deactivateUser, listUsers, updateUserRole, type ManagedUser } from '../lib/admin'
 import { ApiError, type Role } from '../lib/api'
@@ -45,8 +46,11 @@ export function AdminUsersPage() {
   if (isLoading) return <p className="loading-text">Loading users...</p>
 
   return (
-    <section className="auth-page pets-page">
-      <h2>All users</h2>
+    <section className="page">
+      <h2>
+        <Users size={20} style={{ verticalAlign: '-4px', marginRight: 8 }} />
+        All users
+      </h2>
       {error && <p className="form-error">{error}</p>}
 
       <ul className="pet-list">
@@ -82,6 +86,7 @@ export function AdminUsersPage() {
                   disabled={isSelf}
                   onClick={() => handleToggleActive(managedUser)}
                 >
+                  {managedUser.is_active ? <UserX size={14} /> : <ShieldCheck size={14} />}
                   {managedUser.is_active ? 'Deactivate' : 'Activate'}
                 </button>
               </div>

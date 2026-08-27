@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CalendarClock, CheckCircle2, ClipboardCheck, Clock, XCircle } from 'lucide-react'
 import { AppointmentForm } from '../components/AppointmentForm'
 import { NotesSection } from '../components/NotesSection'
 import { useAuth } from '../context/AuthContext'
@@ -20,6 +21,20 @@ const STATUS_LABEL: Record<Appointment['status'], string> = {
   confirmed: 'Confirmed',
   completed: 'Completed',
   cancelled: 'Cancelled',
+}
+
+const STATUS_CLASS: Record<Appointment['status'], string> = {
+  requested: 'status-requested',
+  confirmed: 'status-confirmed',
+  completed: 'status-completed',
+  cancelled: 'status-cancelled',
+}
+
+const STATUS_ICON: Record<Appointment['status'], typeof Clock> = {
+  requested: Clock,
+  confirmed: CheckCircle2,
+  completed: ClipboardCheck,
+  cancelled: XCircle,
 }
 
 export function AppointmentsPage() {
@@ -67,7 +82,7 @@ export function AppointmentsPage() {
   if (isLoading) return <p className="loading-text">Loading appointments...</p>
 
   return (
-    <section className="auth-page pets-page">
+    <section className="page">
       <h2>{isClient ? 'Your appointments' : 'All appointments'}</h2>
       {error && <p className="form-error">{error}</p>}
 
@@ -81,14 +96,35 @@ export function AppointmentsPage() {
         <AppointmentForm pets={pets} onSubmit={handleRequest} onCancel={() => setIsRequesting(false)} />
       )}
 
-      {appointments.length === 0 && <p>No appointments yet.</p>}
+      {appointments.length === 0 && !isRequesting && (
+        <div className="empty-state">
+          <img
+            className="empty-state-image"
+            src="https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=320&q=70&auto=format&fit=crop"
+            alt="A French bulldog puppy in a yellow hoodie"
+            loading="lazy"
+          />
+          <CalendarClock className="empty-state-icon" size={28} />
+          <p>No appointments yet.</p>
+          {isClient && pets.length > 0 && (
+            <button className="btn empty-state-cta" onClick={() => setIsRequesting(true)}>
+              Request an appointment
+            </button>
+          )}
+        </div>
+      )}
 
       <ul className="pet-list">
-        {appointments.map((appointment) => (
+        {appointments.map((appointment) => {
+          const StatusIcon = STATUS_ICON[appointment.status]
+          return (
           <li key={appointment.id} className="pet-card">
             <div className="pet-card-header">
               <strong>{appointment.pet?.name ?? 'Pet'}</strong>
-              <span className="role-badge">{STATUS_LABEL[appointment.status]}</span>
+              <span className={`status-badge ${STATUS_CLASS[appointment.status]}`}>
+                <StatusIcon size={13} />
+                {STATUS_LABEL[appointment.status]}
+              </span>
             </div>
             <p>When: {formatScheduledAt(appointment.scheduled_at)}</p>
             {appointment.reason && <p>{appointment.reason}</p>}
@@ -100,6 +136,7 @@ export function AppointmentsPage() {
                   disabled={pendingId === appointment.id}
                   onClick={() => handleTransition(confirmAppointment, appointment.id)}
                 >
+                  <CheckCircle2 size={14} />
                   Confirm
                 </button>
               )}
@@ -109,6 +146,7 @@ export function AppointmentsPage() {
                   disabled={pendingId === appointment.id}
                   onClick={() => handleTransition(completeAppointment, appointment.id)}
                 >
+                  <ClipboardCheck size={14} />
                   Mark completed
                 </button>
               )}
@@ -118,13 +156,15 @@ export function AppointmentsPage() {
                   disabled={pendingId === appointment.id}
                   onClick={() => handleTransition(cancelAppointment, appointment.id)}
                 >
+                  <XCircle size={14} />
                   Cancel
                 </button>
               )}
             </div>
             <NotesSection appointmentId={appointment.id} canWrite={!isClient} />
           </li>
-        ))}
+          )
+        })}
       </ul>
     </section>
   )

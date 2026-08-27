@@ -27,19 +27,29 @@ export function LoginPage() {
   }
 
   return (
-    <section className="auth-page">
-      <h2>Log in</h2>
-      <form onSubmit={handleSubmit}>
-        <FormField label="Email" type="email" value={email} onChange={setEmail} />
-        <FormField label="Password" type="password" value={password} onChange={setPassword} />
-        {error && <p className="form-error">{error}</p>}
-        <button className="btn" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Logging in...' : 'Log in'}
-        </button>
-      </form>
-      <p>
-        No account? <Link to="/register">Register</Link>
-      </p>
-    </section>
+    <div className="auth-layout">
+      <section className="auth-panel">
+        <h2>Log in</h2>
+        <form onSubmit={handleSubmit}>
+          <FormField label="Email" type="email" value={email} onChange={setEmail} />
+          <FormField label="Password" type="password" value={password} onChange={setPassword} />
+          {error && <p className="form-error">{error}</p>}
+          <button className="btn" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Logging in...' : 'Log in'}
+          </button>
+        </form>
+        <p>
+          No account? <Link to="/register">Register</Link>
+        </p>
+      </section>
+      <div
+        className="auth-image-panel"
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1560807707-8cc77767d783?w=700&q=70&auto=format&fit=crop')",
+          backgroundPosition: 'center 85%',
+        }}
+      />
+    </div>
   )
 }

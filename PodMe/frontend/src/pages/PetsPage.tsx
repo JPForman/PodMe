@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PawPrint, Pencil, Trash2 } from 'lucide-react'
 import { PetForm } from '../components/PetForm'
 import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../lib/api'
@@ -54,11 +55,11 @@ export function PetsPage() {
   if (isLoading) return <p className="loading-text">Loading pets...</p>
 
   return (
-    <section className="auth-page pets-page">
+    <section className="page">
       <h2>{isClient ? 'Your pets' : 'All pets'}</h2>
       {error && <p className="form-error">{error}</p>}
 
-      {isClient && !isAdding && (
+      {isClient && !isAdding && pets.length > 0 && (
         <button className="btn" onClick={() => setIsAdding(true)}>
           Add a pet
         </button>
@@ -67,7 +68,23 @@ export function PetsPage() {
         <PetForm submitLabel="Add pet" onSubmit={handleCreate} onCancel={() => setIsAdding(false)} />
       )}
 
-      {pets.length === 0 && <p>No pets yet.</p>}
+      {pets.length === 0 && !isAdding && (
+        <div className="empty-state">
+          <img
+            className="empty-state-image"
+            src="https://images.unsplash.com/photo-1552053831-71594a27632d?w=320&q=70&auto=format&fit=crop"
+            alt="A retriever puppy holding a tulip"
+            loading="lazy"
+          />
+          <PawPrint className="empty-state-icon" size={28} />
+          <p>No pets yet.</p>
+          {isClient && (
+            <button className="btn empty-state-cta" onClick={() => setIsAdding(true)}>
+              Add a pet
+            </button>
+          )}
+        </div>
+      )}
 
       <ul className="pet-list">
         {pets.map((pet) => (
@@ -93,6 +110,7 @@ export function PetsPage() {
                 {isClient && (
                   <div className="pet-card-actions">
                     <button className="btn" onClick={() => setEditingId(pet.id)} disabled={deletingId === pet.id}>
+                      <Pencil size={14} />
                       Edit
                     </button>
                     <button
@@ -100,6 +118,7 @@ export function PetsPage() {
                       onClick={() => handleDelete(pet.id)}
                       disabled={deletingId === pet.id}
                     >
+                      <Trash2 size={14} />
                       {deletingId === pet.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>

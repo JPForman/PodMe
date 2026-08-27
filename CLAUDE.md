@@ -45,6 +45,7 @@ Build order:
    `https://podme-backend-uzmmmpgnvq-ue.a.run.app`, frontend at `https://podme-vet-app.web.app`,
    frontend bundle confirmed pointing at the live backend URL.
 10. ~~Polish: form validation, error handling, empty/loading states, local dev seed data~~ — **done**
+11. ~~Visual redesign: vet-clinic-themed look and feel across the whole frontend~~ — **done**
 
 Open questions (ask the user before assuming, when relevant step comes up):
 - Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
@@ -365,3 +366,39 @@ navigation, including `ProtectedRoute` on every protected route) — replaced wi
 disables the row's buttons while the request is in flight, and `AppointmentsPage`'s
 confirm/complete/cancel transitions got the same per-row pending-disable treatment to prevent
 double-submits from a slow network.
+
+**Visual redesign (step 11)**: the frontend went from an unstyled Vite/React scaffold (purple
+docs-site palette, no icons, no imagery, no persistent nav) to a vet-clinic-themed look
+inspired by real veterinary hospital sites. `src/index.css`'s `:root` CSS-variable palette was
+recolored (warm teal `--accent`, amber `--accent-2`, cream `--bg`) with the same variable
+*names* kept so every consuming class restyled for free — including the existing
+`@media (prefers-color-scheme: dark)` override block, which mirrors the same names with
+dark-appropriate values, same pattern as before. Fonts are Google Fonts loaded via a plain
+`<link>` in `index.html` (Fredoka for headings, Inter for body) — no build-tooling font
+package. Icons are `lucide-react` (a new npm dependency). Photography is hotlinked directly
+from Unsplash's CDN (`images.unsplash.com/photo-<slug>`) rather than downloaded/stored — there
+is no file-upload or image-hosting service in this app, and the free-tier constraint ruled one
+out, so every photo URL used was manually verified (HTTP 200 + visual content check) before
+being hardcoded into the relevant page.
+
+A persistent layout shell didn't exist before this step — every page was a bare `<section>`
+with no header/nav/footer, and cross-page links only lived inline on `DashboardPage`. New
+`src/components/layout/{SiteHeader,SiteFooter,SiteLayout}.tsx` fill that gap.
+`SiteLayout` is wired in via React Router's *layout route* pattern in `App.tsx` — a parent
+`<Route element={<SiteLayout />}>` with no `path` of its own, wrapping the existing route list;
+`SiteLayout` renders `<SiteHeader/>`, then `<main><Outlet/></main>`, then `<SiteFooter/>`, so
+the header/footer render once instead of being repeated per route. This is why the old fixed
+`#root { width: 1126px; border-inline: ... }` rule was deleted — page-width constraint moved to
+a single `.site-main` rule on that shared `<main>` instead of a per-page class. `SiteHeader`
+reads `useAuth()` directly to switch between nav links + logout (authenticated) and Log
+in/Register buttons (guest); `ProtectedRoute` itself needed no changes since it just nests
+inside the layout route exactly as before.
+
+`HomePage` was promoted from a 3-line placeholder function inline in `App.tsx` into a real
+`src/pages/HomePage.tsx` landing page (hero banner, services grid, trust badges) — the
+services list and trust-badge stats (e.g. "500+ Happy Pets") are intentionally fictional
+placeholder marketing copy, approved as fine for a demo app with no real clinic behind it.
+`AppointmentsPage` gained a `STATUS_CLASS` lookup object (same pattern as its existing
+`STATUS_LABEL` map) mapping each `Appointment['status']` to a `status-{requested,confirmed,
+completed,cancelled}` CSS modifier class, so appointment status badges are color-coded instead
+of all sharing the generic `.role-badge` look.
