@@ -20,6 +20,16 @@ export class ApiError extends Error {
   }
 }
 
+// Set by AuthContext so an expired/revoked token (401 on an authenticated
+// request) clears auth state and lets ProtectedRoute redirect to /login,
+// instead of surfacing as a generic per-page error.
+type UnauthorizedHandler = () => void
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+  unauthorizedHandler = handler
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}, token?: string | null) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -30,6 +40,12 @@ export async function apiFetch(path: string, options: RequestInit = {}, token?: 
       ...options.headers,
     },
   })
+
+  // Only fires for a rejected authenticated request (expired/revoked
+  // token) — a wrong-password login attempt returns 422, not 401.
+  if (res.status === 401 && token) {
+    unauthorizedHandler?.()
+  }
 
   const data = await res.json().catch(() => null)
   if (!res.ok) throw new ApiError(res.status, data)

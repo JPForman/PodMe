@@ -46,6 +46,7 @@ Build order:
    frontend bundle confirmed pointing at the live backend URL.
 10. ~~Polish: form validation, error handling, empty/loading states, local dev seed data~~ — **done**
 11. ~~Visual redesign: vet-clinic-themed look and feel across the whole frontend~~ — **done**
+12. ~~Security hardening: API rate limiting, Sanctum token expiration, frontend security headers/CSP~~ — **done**
 
 Open questions (ask the user before assuming, when relevant step comes up):
 - Whether pet photos/file uploads are in scope for MVP (affects whether cloud storage is needed at all)
@@ -402,3 +403,50 @@ placeholder marketing copy, approved as fine for a demo app with no real clinic 
 `STATUS_LABEL` map) mapping each `Appointment['status']` to a `status-{requested,confirmed,
 completed,cancelled}` CSS modifier class, so appointment status badges are color-coded instead
 of all sharing the generic `.role-badge` look.
+
+**Security hardening (step 12)**: a full-app security review (not diff-based — the repo has
+no tracked upstream branch) found the RBAC/mass-assignment/query layer already solid (Eloquent
+everywhere, no raw SQL; `role`/`is_active`/`owner_id`/`pet_id`/`status`/`appointment_id`/
+`author_id` all kept out of `Fillable`; no XSS sinks anywhere in the frontend — zero matches
+for `dangerouslySetInnerHTML`/`innerHTML`/`eval`; `APP_DEBUG` safely defaults false and CI sets
+it explicitly false in prod; CI/CD already uses Workload Identity Federation, not static GCP
+keys) but surfaced three gaps, now fixed:
+
+- **API rate limiting** — previously nonexistent (`bootstrap/app.php` never called
+  `throttleApi()` or registered any `RateLimiter::for()`), so `/api/login`/`/api/register` were
+  fully brute-forceable. Named limiters now live in `app/Providers/AppServiceProvider.php`
+  (Laravel 11+ removed `RouteServiceProvider`, the old home for these) — `api` (60/min, keyed by
+  user id or IP) applied globally via `$middleware->throttleApi()` in `bootstrap/app.php`, plus
+  tighter `login` and `register` limiters (5/min each, `login` keyed by `email|ip` so one
+  attacker email isn't throttled by the *other* users sharing its IP) applied per-route in
+  `routes/api.php`. Verified against a running dev server: the 6th rapid login/register attempt
+  returns `429` with a `Retry-After` header.
+- **Sanctum token expiration** — `config/sanctum.php`'s `expiration` was `null` (tokens never
+  expired); now `10080` (7 days, in minutes). Sanctum checks `created_at > now() - expiration`,
+  so this invalidates every *already-issued* token past 7 days old the moment it ships, not
+  just new ones — worth knowing if testing against a long-lived dev session. This exposed a
+  frontend gap: `apiFetch` had no 401 handling at all (an expired token would render as a
+  generic per-page error, not a re-login prompt). Fixed via a small handler-registry in
+  `src/lib/api.ts` (`setUnauthorizedHandler`) that `AuthContext.tsx` wires up in a `useEffect`
+  to clear `localStorage`/state on any 401 from an authenticated request (guarded by `token &&`
+  so a plain wrong-password 422 on the login page never triggers it) — `ProtectedRoute` already
+  redirects to `/login` whenever `user` is `null`, so no new redirect logic was needed.
+- **Frontend security headers** — `firebase.json` had no `headers` block at all. Added
+  `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+  `Permissions-Policy`, `Strict-Transport-Security` (no `preload` — that's a harder-to-reverse
+  commitment than fits this pass), and a `Content-Security-Policy` scoped to what the app
+  actually loads: Unsplash images (`img-src`), Google Fonts (`font-src`/part of `style-src`),
+  the Cloud Run backend (`connect-src https://*.run.app` — a wildcard rather than the exact
+  current URL, so the CSP survives the backend's URL changing later). `script-src` intentionally
+  excludes `'unsafe-inline'` — the one inline `<script>` in `index.html` (a pre-paint
+  theme-flash-prevention snippet) is instead allowlisted by an exact `sha256-` hash of its
+  literal text, computed via `openssl dgst -sha256 -binary <script text> | openssl base64`; a
+  comment directly above that script in `index.html` flags that editing its text invalidates
+  the hash and silently reintroduces the theme flash (cosmetic breakage, not functional) until
+  the hash in `firebase.json` is recomputed. `style-src` does keep `'unsafe-inline'`, since
+  several pages use React's `style={{...}}` prop (rendered as literal inline `style=""`
+  attributes with no practical hash/nonce for dynamic values) — a much smaller relaxation than
+  `'unsafe-inline'` on `script-src` would be, since style injection alone can't execute JS.
+
+`composer audit` and `npm audit` were both run as a check (not auto-upgrade) — zero
+vulnerabilities found in either dependency tree at the time of this review.

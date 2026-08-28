@@ -18,6 +18,8 @@ Laravel), pairing a Laravel API backend with a React + TypeScript frontend.
   authorization rules
 - 📝 **Visit notes** — immutable notes staff attach to appointments, read-only for clients
 - 🛠️ **Admin console** — change any user's role, activate/deactivate accounts
+- 🔒 **Hardened** — API rate limiting, expiring auth tokens, CSP and security headers on the
+  deployed frontend
 
 ## Tech stack
 
@@ -101,12 +103,15 @@ npm run dev                 # http://localhost:5173
 
 ## Status
 
-All 10 planned build steps are done: auth, RBAC, pets/appointments/notes, admin user
-management, Neon migration, CI/CD, and polish (validation, error/loading states, seed data).
-CI/CD is live and verified — GitHub Actions tests every PR and, on merge to `main`, deploys
-the backend to Cloud Run and the frontend to Firebase Hosting. The frontend also has a
-vet-clinic-themed visual pass — persistent header/nav/footer, warm color palette, hero/service
-sections on the homepage, and photography sourced from Unsplash. See
+All 12 planned build steps are done: auth, RBAC, pets/appointments/notes, admin user
+management, Neon migration, CI/CD, polish (validation, error/loading states, seed data), a
+vet-clinic-themed visual pass, and a security hardening pass. CI/CD is live and verified —
+GitHub Actions tests every PR and, on merge to `main`, deploys the backend to Cloud Run and the
+frontend to Firebase Hosting. The frontend has a persistent header/nav/footer, warm color
+palette, hero/service sections on the homepage, and photography sourced from Unsplash. A
+full-app security review confirmed the RBAC/mass-assignment/query layer was already solid and
+added API rate limiting, expiring auth tokens, and CSP/security headers on the deployed
+frontend — `composer audit`/`npm audit` both report zero known vulnerabilities. See
 [`CLAUDE.md`](./CLAUDE.md) for the full build plan, architecture notes, and design decisions.
 
 ## License

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { apiFetch, type User } from '../lib/api'
+import { apiFetch, setUnauthorizedHandler, type User } from '../lib/api'
 
 type AuthContextValue = {
   user: User | null
@@ -30,6 +30,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(JSON.parse(storedUser))
     }
     setIsLoading(false)
+  }, [])
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      setUser(null)
+      setToken(null)
+    })
+    return () => setUnauthorizedHandler(null)
   }, [])
 
   function persist(nextUser: User, nextToken: string) {

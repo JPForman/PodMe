@@ -18,6 +18,9 @@
     <script>
       // Apply a saved theme choice before first paint, so the page never flashes
       // the wrong theme while the React app boots.
+      // NOTE: firebase.json's CSP allows this exact script via a sha256 hash.
+      // Editing this script's text invalidates that hash and CSP will block it —
+      // recompute with: openssl dgst -sha256 -binary <script text> | openssl base64
       try {
         var savedTheme = localStorage.getItem('theme')
         if (savedTheme === 'light' || savedTheme === 'dark') {
