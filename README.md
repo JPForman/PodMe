@@ -1,5 +1,7 @@
 # 🐾 PodMe
 
+🔗 **Live site:** [podme-vet-app.web.app](https://podme-vet-app.web.app)
+
 A vet office management app for clients, pets, appointments, and visit notes — with
 role-based access for **admins**, **employees**, and **clients**.
 
